@@ -19,7 +19,7 @@ type Props = {
 const VAZIO: Contratante = {
   codigo: '', nome: '', cnpj: '', endereco: '', cep: '',
   municipio: '', uf: 'SP', email: '', email_nf: '',
-  inscricao_municipal: '', discriminacao_adicional: '',
+  inscricao_municipal: '', inscricao_estadual: '', discriminacao_adicional: '',
 }
 
 export function ContratanteDialog({ open, onClose, onSave, inicial }: Props) {
@@ -78,9 +78,15 @@ export function ContratanteDialog({ open, onClose, onSave, inicial }: Props) {
               <Input {...register('email_nf')} type="email" />
             </div>
           </div>
-          <div className="space-y-1">
-            <Label>Inscrição Municipal</Label>
-            <Input {...register('inscricao_municipal')} />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <Label>Inscrição Municipal</Label>
+              <Input {...register('inscricao_municipal')} />
+            </div>
+            <div className="space-y-1">
+              <Label>Inscrição Estadual</Label>
+              <Input {...register('inscricao_estadual')} />
+            </div>
           </div>
           <div className="space-y-1">
             <Label>Discriminação adicional (aparece na NF)</Label>

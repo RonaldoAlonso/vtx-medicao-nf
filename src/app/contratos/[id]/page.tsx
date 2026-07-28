@@ -80,15 +80,26 @@ export default function EditarContratoPage() {
     setItens(prev => prev.map((it, i) => i === idx ? { ...it, [field]: value } : it))
   }
 
-  function subtotal(it: Item) {
+  function subtotalNum(it: Item) {
     const q = parseFloat(it.quantidade) || 0
     const p = parseFloat(it.preco_unitario) || 0
-    return moeda(q * p)
+    return q * p
   }
 
+  function subtotal(it: Item) {
+    return moeda(subtotalNum(it))
+  }
+
+  // Valor Total = somatório automático de todos os itens da planilha
+  const valorTotal = itens.reduce((acc, it) => acc + subtotalNum(it), 0)
+
   async function salvar() {
-    if (!form.numero || !form.contratante_id || !form.obra || !form.valor_total) {
-      alert('Preencha os campos obrigatórios.')
+    if (!form.numero || !form.contratante_id || !form.obra) {
+      alert('Preencha os campos obrigatórios: Número, Contratante e Obra.')
+      return
+    }
+    if (valorTotal <= 0) {
+      alert('Adicione ao menos um item com quantidade e preço na planilha orçamentária.')
       return
     }
     setSalvando(true)
@@ -97,7 +108,7 @@ export default function EditarContratoPage() {
       contratante_id: form.contratante_id,
       obra: form.obra,
       unidade_construtiva: form.unidade_construtiva,
-      valor_total: parseFloat(form.valor_total.replace(',', '.')),
+      valor_total: valorTotal,
       data_inicio: form.data_inicio || null,
       data_fim: form.data_fim || null,
       ativo: form.ativo,
@@ -182,8 +193,9 @@ export default function EditarContratoPage() {
               <Input value={form.unidade_construtiva} onChange={e => setForm(p => ({ ...p, unidade_construtiva: e.target.value }))} />
             </div>
             <div className="space-y-1">
-              <Label>Valor Total (R$) *</Label>
-              <Input value={form.valor_total} onChange={e => setForm(p => ({ ...p, valor_total: e.target.value }))} />
+              <Label>Valor Total (R$)</Label>
+              <Input value={moeda(valorTotal)} readOnly tabIndex={-1} className="bg-gray-50 font-semibold text-gray-900 cursor-default" />
+              <p className="text-xs text-gray-400">Somatório automático dos itens da planilha orçamentária.</p>
             </div>
           </div>
           <div className="grid grid-cols-3 gap-4">
@@ -250,6 +262,13 @@ export default function EditarContratoPage() {
                   <tr><td colSpan={7} className="py-4 text-center text-gray-400 text-xs">Nenhum item. Clique em "Adicionar Item".</td></tr>
                 )}
               </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-gray-300 font-semibold text-gray-900">
+                  <td colSpan={5} className="py-2 pr-2 text-right">VALOR TOTAL</td>
+                  <td className="py-2 pr-2">{moeda(valorTotal)}</td>
+                  <td></td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         </CardContent>

@@ -20,15 +20,16 @@ export type Contratante = {
   email: string
   email_nf: string
   inscricao_municipal: string
+  inscricao_estadual: string
   discriminacao_adicional: string
 }
 
 const INICIAIS: Omit<Contratante, 'id'>[] = [
-  { codigo: '1A2', nome: 'B B L ENGENHARIA, CONSTRUCAO E COMERCIO LTDA', cnpj: '05.406.235/0001-00', endereco: 'R. MERGENTHALER, 81 - VILA LEOPOLDINA', cep: '05311-030', municipio: 'São Paulo', uf: 'SP', email: 'nf@miya-water.com.br', email_nf: '', inscricao_municipal: '3.186.288-8', discriminacao_adicional: '' },
-  { codigo: '6A', nome: 'CONSORCIO DESENVOLVIMENTO SUSTENTAVEL INTEGRA', cnpj: '58.750.016/0001-00', endereco: 'R DAS ROSAS 74, CONJ A - MIRANDOPOLIS', cep: '04048-000', municipio: 'São Paulo', uf: 'SP', email: 'robson.rodriguez@enops.com.br', email_nf: 'rafael.silva@integra6a.com', inscricao_municipal: '1.716.721-3', discriminacao_adicional: 'Número de Inscrição da obra: SFOBRAS 2525/0006000-7\nCNO. 90.023.10232/76' },
-  { codigo: 'CATUI', nome: 'CATUI ENGENHARIA LTDA', cnpj: '07.847.697/0001-80', endereco: 'AV MARCOS PENTEADO DE ULHOA RODRIGUES, 5100 - TAMBORE', cep: '06.543-001', municipio: 'Santana de Parnaíba', uf: 'SP', email: 'LUIZ@BRUKUS.COM.BR', email_nf: 'diogo@catuiengenharia.com.br', inscricao_municipal: '', discriminacao_adicional: 'Centro de Custo: 10148 - Sabesp - Integra Tietê - Pacote 16.' },
-  { codigo: '10A', nome: 'GUARULHOS 10A DP SPE LTDA', cnpj: '58.478.387/0001-76', endereco: 'R BARTOLOME CARDUCHO 335 - JARDIM DAS VERTENTES', cep: '05541-130', municipio: 'São Paulo', uf: 'SP', email: 'erico.monteiro@dascoengenharia.com.br', email_nf: '', inscricao_municipal: '1.620.324-0', discriminacao_adicional: '' },
-  { codigo: 'BBL', nome: 'B B L ENGENHARIA, CONSTRUCAO E COMERCIO LTDA', cnpj: '05.406.235/0001-00', endereco: 'R. MERGENTHALER, 81 - VILA LEOPOLDINA', cep: '05311-030', municipio: 'São Paulo', uf: 'SP', email: 'nf@miya-water.com.br', email_nf: '', inscricao_municipal: '3.186.288-8', discriminacao_adicional: 'Nome da Obra: Consórcio São Francisco e Bichinhos\nNúmero de Inscrição da Obra: 90.022.48190/78' },
+  { codigo: '1A2', nome: 'B B L ENGENHARIA, CONSTRUCAO E COMERCIO LTDA', cnpj: '05.406.235/0001-00', endereco: 'R. MERGENTHALER, 81 - VILA LEOPOLDINA', cep: '05311-030', municipio: 'São Paulo', uf: 'SP', email: 'nf@miya-water.com.br', email_nf: '', inscricao_municipal: '3.186.288-8', inscricao_estadual: '', discriminacao_adicional: '' },
+  { codigo: '6A', nome: 'CONSORCIO DESENVOLVIMENTO SUSTENTAVEL INTEGRA', cnpj: '58.750.016/0001-00', endereco: 'R DAS ROSAS 74, CONJ A - MIRANDOPOLIS', cep: '04048-000', municipio: 'São Paulo', uf: 'SP', email: 'robson.rodriguez@enops.com.br', email_nf: 'rafael.silva@integra6a.com', inscricao_municipal: '1.716.721-3', inscricao_estadual: '', discriminacao_adicional: 'Número de Inscrição da obra: SFOBRAS 2525/0006000-7\nCNO. 90.023.10232/76' },
+  { codigo: 'CATUI', nome: 'CATUI ENGENHARIA LTDA', cnpj: '07.847.697/0001-80', endereco: 'AV MARCOS PENTEADO DE ULHOA RODRIGUES, 5100 - TAMBORE', cep: '06.543-001', municipio: 'Santana de Parnaíba', uf: 'SP', email: 'LUIZ@BRUKUS.COM.BR', email_nf: 'diogo@catuiengenharia.com.br', inscricao_municipal: '', inscricao_estadual: '', discriminacao_adicional: 'Centro de Custo: 10148 - Sabesp - Integra Tietê - Pacote 16.' },
+  { codigo: '10A', nome: 'GUARULHOS 10A DP SPE LTDA', cnpj: '58.478.387/0001-76', endereco: 'R BARTOLOME CARDUCHO 335 - JARDIM DAS VERTENTES', cep: '05541-130', municipio: 'São Paulo', uf: 'SP', email: 'erico.monteiro@dascoengenharia.com.br', email_nf: '', inscricao_municipal: '1.620.324-0', inscricao_estadual: '', discriminacao_adicional: '' },
+  { codigo: 'BBL', nome: 'B B L ENGENHARIA, CONSTRUCAO E COMERCIO LTDA', cnpj: '05.406.235/0001-00', endereco: 'R. MERGENTHALER, 81 - VILA LEOPOLDINA', cep: '05311-030', municipio: 'São Paulo', uf: 'SP', email: 'nf@miya-water.com.br', email_nf: '', inscricao_municipal: '3.186.288-8', inscricao_estadual: '', discriminacao_adicional: 'Nome da Obra: Consórcio São Francisco e Bichinhos\nNúmero de Inscrição da Obra: 90.022.48190/78' },
 ]
 
 export default function ContratantesPage() {
@@ -97,7 +98,7 @@ export default function ContratantesPage() {
                     <Badge variant="outline" className="font-mono text-xs">{c.codigo}</Badge>
                     <span className="font-semibold text-gray-900">{c.nome}</span>
                   </div>
-                  <p className="text-sm text-gray-500">CNPJ: {c.cnpj} · IM: {c.inscricao_municipal || '—'}</p>
+                  <p className="text-sm text-gray-500">CNPJ: {c.cnpj} · IM: {c.inscricao_municipal || '—'} · IE: {c.inscricao_estadual || '—'}</p>
                   <p className="text-sm text-gray-500">{c.endereco} — {c.municipio}/{c.uf}</p>
                   <p className="text-sm text-gray-400">{c.email}</p>
                 </div>

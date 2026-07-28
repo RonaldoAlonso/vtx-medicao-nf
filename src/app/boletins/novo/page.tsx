@@ -13,19 +13,29 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
 type Contrato = { id: string; numero: string; obra: string; contratantes: { codigo: string } }
-type ContratoItem = { id: string; referencia: string; descricao: string; unidade: string; quantidade: number; preco_unitario: number; subtotal: number }
-type ItemMedicao = ContratoItem & { acumulado_anterior: string; valor_medido: string; observacao: string }
-
-function moeda(v: number) {
-  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+type ItemMedicao = {
+  id: string
+  referencia: string
+  descricao: string
+  unidade: string
+  quantidade: number
+  preco_unitario: number
+  subtotal: number
+  acumulado_anterior: number
+  valor_medido: string  // entrada do usuário (quantidade medida)
+  observacao: string
 }
+
+const pct = (v: number, total: number) => total > 0 ? `${(v / total * 100).toFixed(1)}%` : '0%'
+const moeda = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
 export default function NovoBoletimPage() {
   const router = useRouter()
   const supabase = createClient()
 
   const [contratos, setContratos] = useState<Contrato[]>([])
-  const [itensContrato, setItensContrato] = useState<ItemMedicao[]>([])
+  const [itens, setItens] = useState<ItemMedicao[]>([])
+  const [carregandoItens, setCarregandoItens] = useState(false)
   const [salvando, setSalvando] = useState(false)
 
   const [form, setForm] = useState({
@@ -37,34 +47,80 @@ export default function NovoBoletimPage() {
   })
 
   useEffect(() => {
-    supabase.from('contratos').select('id, numero, obra, contratantes(codigo)').order('created_at', { ascending: false })
-      .then(({ data }) => setContratos((data as unknown as Contrato[]) ?? []))
+    // range(0,999) garante que busca todos os contratos sem limite de paginação
+    supabase
+      .from('contratos')
+      .select('id, numero, obra, contratantes(codigo)')
+      .eq('ativo', true)
+      .order('created_at', { ascending: false })
+      .range(0, 999)
+      .then(({ data, error }) => {
+        setContratos((data as unknown as Contrato[]) ?? [])
+      })
   }, [])
 
   async function selecionarContrato(contrato_id: string) {
-    setForm(p => ({ ...p, contrato_id }))
-    // Busca o próximo número de medição
-    const { data: bms } = await supabase.from('boletins').select('numero_medicao').eq('contrato_id', contrato_id).order('numero_medicao', { ascending: false }).limit(1)
+    setCarregandoItens(true)
+    setItens([])
+
+    // Próximo número de medição
+    const { data: bms } = await supabase
+      .from('boletins')
+      .select('numero_medicao')
+      .eq('contrato_id', contrato_id)
+      .order('numero_medicao', { ascending: false })
+      .limit(1)
     const proximo = bms && bms.length > 0 ? bms[0].numero_medicao + 1 : 1
     setForm(p => ({ ...p, contrato_id, numero_medicao: String(proximo) }))
-    // Carrega os itens do contrato com acumulado anterior
-    const { data: its } = await supabase.from('contrato_itens').select('*').eq('contrato_id', contrato_id).order('ordem')
-    if (!its) return
-    // Para cada item, busca o acumulado anterior
-    const itemsComAcumulado: ItemMedicao[] = await Promise.all(its.map(async (it) => {
-      const { data: medidos } = await supabase.from('boletim_itens').select('valor_medido, boletins!inner(contrato_id)').eq('contrato_item_id', it.id)
+
+    // Itens do contrato
+    const { data: its } = await supabase
+      .from('contrato_itens')
+      .select('*')
+      .eq('contrato_id', contrato_id)
+      .order('ordem')
+      .range(0, 999)
+
+    if (!its || its.length === 0) { setCarregandoItens(false); return }
+
+    // Acumulado anterior de cada item (soma dos boletins anteriores)
+    const comAcumulado: ItemMedicao[] = await Promise.all(its.map(async (it) => {
+      const { data: medidos } = await supabase
+        .from('boletim_itens')
+        .select('valor_medido')
+        .eq('contrato_item_id', it.id)
       const acumulado = (medidos ?? []).reduce((s: number, m: any) => s + (m.valor_medido ?? 0), 0)
-      return { ...it, acumulado_anterior: String(acumulado), valor_medido: '0', observacao: '' }
+      return {
+        id: it.id,
+        referencia: it.referencia,
+        descricao: it.descricao,
+        unidade: it.unidade ?? '',
+        quantidade: it.quantidade ?? 0,
+        preco_unitario: it.preco_unitario ?? 0,
+        subtotal: (it.quantidade ?? 0) * (it.preco_unitario ?? 0),
+        acumulado_anterior: acumulado,
+        valor_medido: '',
+        observacao: '',
+      }
     }))
-    setItensContrato(itemsComAcumulado)
+
+    setItens(comAcumulado)
+    setCarregandoItens(false)
   }
 
   function updateItem(idx: number, field: 'valor_medido' | 'observacao', value: string) {
-    setItensContrato(prev => prev.map((it, i) => i === idx ? { ...it, [field]: value } : it))
+    setItens(prev => prev.map((it, i) => i === idx ? { ...it, [field]: value } : it))
+  }
+
+  function calcItem(it: ItemMedicao) {
+    const qtdMedida = parseFloat(it.valor_medido) || 0
+    const valorMedido = qtdMedida * it.preco_unitario
+    const saldo = it.subtotal - it.acumulado_anterior - valorMedido
+    return { qtdMedida, valorMedido, saldo }
   }
 
   function totalMedicao() {
-    return itensContrato.reduce((s, it) => s + (parseFloat(it.valor_medido) || 0) * it.preco_unitario, 0)
+    return itens.reduce((s, it) => s + calcItem(it).valorMedido, 0)
   }
 
   async function salvar() {
@@ -86,34 +142,32 @@ export default function NovoBoletimPage() {
       valor_liquido: valorBruto,
     }).select().single()
 
-    if (error || !boletim) { alert('Erro ao salvar boletim.'); setSalvando(false); return }
+    if (error || !boletim) { alert('Erro ao salvar boletim: ' + error?.message); setSalvando(false); return }
 
-    const itensFiltrados = itensContrato.filter(it => parseFloat(it.valor_medido) > 0)
-    if (itensFiltrados.length > 0) {
-      const acumAnteriorTotal = itensContrato.reduce((s, it) => s + parseFloat(it.acumulado_anterior || '0'), 0)
-      await supabase.from('boletim_itens').insert(itensFiltrados.map(it => {
-        const qtdMedida = parseFloat(it.valor_medido) || 0
-        const valorMedido = qtdMedida * it.preco_unitario
-        const acumAnt = parseFloat(it.acumulado_anterior) || 0
-        const saldo = it.subtotal - acumAnt - valorMedido
-        return {
-          boletim_id: boletim.id,
-          contrato_item_id: it.id,
-          referencia: it.referencia,
-          descricao: it.descricao,
-          unidade: it.unidade,
-          quantidade_contratada: it.quantidade,
-          preco_unitario: it.preco_unitario,
-          subtotal: it.subtotal,
-          acumulado_anterior: acumAnt,
-          perc_acumulado_anterior: it.subtotal > 0 ? acumAnt / it.subtotal : 0,
-          valor_medido: valorMedido,
-          perc_atual: it.subtotal > 0 ? valorMedido / it.subtotal : 0,
-          saldo,
-          perc_saldo: it.subtotal > 0 ? saldo / it.subtotal : 0,
-          observacao: it.observacao,
-        }
-      }))
+    const itensMedidos = itens.filter(it => parseFloat(it.valor_medido) > 0)
+    if (itensMedidos.length > 0) {
+      await supabase.from('boletim_itens').insert(
+        itensMedidos.map(it => {
+          const { qtdMedida, valorMedido, saldo } = calcItem(it)
+          return {
+            boletim_id: boletim.id,
+            contrato_item_id: it.id,
+            referencia: it.referencia,
+            descricao: it.descricao,
+            unidade: it.unidade,
+            quantidade_contratada: it.quantidade,
+            preco_unitario: it.preco_unitario,
+            subtotal: it.subtotal,
+            acumulado_anterior: it.acumulado_anterior,
+            perc_acumulado_anterior: it.subtotal > 0 ? it.acumulado_anterior / it.subtotal : 0,
+            valor_medido: valorMedido,
+            perc_atual: it.subtotal > 0 ? valorMedido / it.subtotal : 0,
+            saldo,
+            perc_saldo: it.subtotal > 0 ? saldo / it.subtotal : 0,
+            observacao: it.observacao,
+          }
+        })
+      )
     }
     router.push('/boletins')
   }
@@ -121,7 +175,7 @@ export default function NovoBoletimPage() {
   const contrato = contratos.find(c => c.id === form.contrato_id)
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="space-y-6 max-w-7xl">
       <div className="flex items-center gap-3">
         <Link href="/boletins"><Button variant="ghost" size="sm"><ArrowLeft className="w-4 h-4" /></Button></Link>
         <div>
@@ -138,10 +192,12 @@ export default function NovoBoletimPage() {
             <Select onValueChange={(v) => selecionarContrato(String(v ?? ''))}>
               <SelectTrigger className="w-full">
                 <SelectValue>
-                  {contrato ? `[${contrato.contratantes?.codigo}] ${contrato.numero} — ${contrato.obra}` : 'Selecione o contrato...'}
+                  {contrato
+                    ? `[${contrato.contratantes?.codigo}] ${contrato.numero} — ${contrato.obra}`
+                    : contratos.length === 0 ? 'Carregando contratos...' : 'Selecione o contrato...'}
                 </SelectValue>
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-60">
                 {contratos.map(c => (
                   <SelectItem key={c.id} value={c.id} className="whitespace-normal">
                     [{c.contratantes?.codigo}] {c.numero} — {c.obra}
@@ -171,51 +227,98 @@ export default function NovoBoletimPage() {
         </CardContent>
       </Card>
 
-      {itensContrato.length > 0 && (
+      {carregandoItens && (
+        <div className="flex items-center justify-center py-8 text-gray-400">
+          <Loader2 className="w-5 h-5 animate-spin mr-2" /> Carregando itens do contrato...
+        </div>
+      )}
+
+      {!carregandoItens && itens.length > 0 && (
         <Card>
-          <CardHeader><CardTitle className="text-base">Quantidades Medidas</CardTitle></CardHeader>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Planilha de Medição — {itens.length} itens
+            </CardTitle>
+          </CardHeader>
           <CardContent>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="w-full text-xs border-collapse">
                 <thead>
-                  <tr className="border-b text-gray-500 text-left text-xs">
-                    <th className="pb-2 pr-2">Ref.</th>
-                    <th className="pb-2 pr-2">Descrição</th>
-                    <th className="pb-2 pr-2 w-12">Un.</th>
-                    <th className="pb-2 pr-2 w-24 text-right">Contratado</th>
-                    <th className="pb-2 pr-2 w-28 text-right">Acum. Ant.</th>
-                    <th className="pb-2 pr-2 w-28">Qtd. Medida</th>
-                    <th className="pb-2 pr-2 w-28 text-right">Valor Medido</th>
-                    <th className="pb-2 w-32">Observação</th>
+                  <tr className="bg-gray-50 border-b-2 border-gray-200">
+                    <th className="p-2 text-left font-semibold text-gray-600 w-20">Ref.</th>
+                    <th className="p-2 text-left font-semibold text-gray-600">Descrição</th>
+                    <th className="p-2 text-center font-semibold text-gray-600 w-10">Un.</th>
+                    <th className="p-2 text-right font-semibold text-gray-600 w-20">Qtd. Contr.</th>
+                    <th className="p-2 text-right font-semibold text-gray-600 w-24">Preço Unit.</th>
+                    <th className="p-2 text-right font-semibold text-gray-600 w-28">Sub-Total</th>
+                    <th className="p-2 text-right font-semibold text-gray-600 w-28">Acum. Ant. (R$)</th>
+                    <th className="p-2 text-right font-semibold text-gray-600 w-16">% Acum.</th>
+                    <th className="p-2 text-center font-semibold text-blue-700 w-24 bg-blue-50">Qtd. Medida</th>
+                    <th className="p-2 text-right font-semibold text-blue-700 w-28 bg-blue-50">Valor Medido</th>
+                    <th className="p-2 text-right font-semibold text-blue-700 w-16 bg-blue-50">% Atual</th>
+                    <th className="p-2 text-right font-semibold text-gray-600 w-28">Saldo (R$)</th>
+                    <th className="p-2 text-right font-semibold text-gray-600 w-16">% Saldo</th>
+                    <th className="p-2 text-left font-semibold text-gray-600 w-28">Obs.</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y">
-                  {itensContrato.map((it, idx) => {
-                    const qtd = parseFloat(it.valor_medido) || 0
-                    const valorMedido = qtd * it.preco_unitario
+                <tbody className="divide-y divide-gray-100">
+                  {itens.map((it, idx) => {
+                    const { valorMedido, saldo } = calcItem(it)
                     return (
-                      <tr key={it.id}>
-                        <td className="py-1 pr-2 text-xs text-gray-500">{it.referencia}</td>
-                        <td className="py-1 pr-2 text-xs">{it.descricao}</td>
-                        <td className="py-1 pr-2 text-xs text-gray-500">{it.unidade}</td>
-                        <td className="py-1 pr-2 text-xs text-right text-gray-500">{it.quantidade}</td>
-                        <td className="py-1 pr-2 text-xs text-right text-gray-500">{moeda(parseFloat(it.acumulado_anterior) || 0)}</td>
-                        <td className="py-1 pr-2">
-                          <Input value={it.valor_medido} onChange={e => updateItem(idx, 'valor_medido', e.target.value)} type="number" min={0} className="h-7 text-xs w-24" />
+                      <tr key={it.id} className="hover:bg-gray-50">
+                        <td className="p-2 text-gray-500">{it.referencia}</td>
+                        <td className="p-2 font-medium">{it.descricao}</td>
+                        <td className="p-2 text-center text-gray-500">{it.unidade}</td>
+                        <td className="p-2 text-right text-gray-600">{it.quantidade}</td>
+                        <td className="p-2 text-right text-gray-600">{moeda(it.preco_unitario)}</td>
+                        <td className="p-2 text-right font-medium">{moeda(it.subtotal)}</td>
+                        <td className="p-2 text-right text-gray-600">{moeda(it.acumulado_anterior)}</td>
+                        <td className="p-2 text-right text-gray-500">{pct(it.acumulado_anterior, it.subtotal)}</td>
+                        <td className="p-2 bg-blue-50">
+                          <Input
+                            value={it.valor_medido}
+                            onChange={e => updateItem(idx, 'valor_medido', e.target.value)}
+                            type="number"
+                            min={0}
+                            step="0.01"
+                            className="h-7 text-xs text-right w-full"
+                            placeholder="0"
+                          />
                         </td>
-                        <td className="py-1 pr-2 text-xs text-right font-medium">{moeda(valorMedido)}</td>
-                        <td className="py-1">
-                          <Input value={it.observacao} onChange={e => updateItem(idx, 'observacao', e.target.value)} className="h-7 text-xs" />
+                        <td className="p-2 text-right font-semibold text-blue-700 bg-blue-50">{moeda(valorMedido)}</td>
+                        <td className="p-2 text-right text-blue-600 bg-blue-50">{pct(valorMedido, it.subtotal)}</td>
+                        <td className={`p-2 text-right font-medium ${saldo < 0 ? 'text-red-600' : 'text-gray-700'}`}>{moeda(saldo)}</td>
+                        <td className="p-2 text-right text-gray-500">{pct(saldo, it.subtotal)}</td>
+                        <td className="p-2">
+                          <Input
+                            value={it.observacao}
+                            onChange={e => updateItem(idx, 'observacao', e.target.value)}
+                            className="h-7 text-xs w-full"
+                          />
                         </td>
                       </tr>
                     )
                   })}
                 </tbody>
                 <tfoot>
-                  <tr className="border-t-2 font-bold">
-                    <td colSpan={6} className="pt-2 text-sm">Total da Medição</td>
-                    <td className="pt-2 text-sm text-right">{moeda(totalMedicao())}</td>
+                  <tr className="border-t-2 border-gray-300 bg-gray-50 font-bold">
+                    <td colSpan={5} className="p-2 text-sm">TOTAL DA MEDIÇÃO</td>
+                    <td className="p-2 text-right text-sm">
+                      {moeda(itens.reduce((s, it) => s + it.subtotal, 0))}
+                    </td>
+                    <td className="p-2 text-right text-sm">
+                      {moeda(itens.reduce((s, it) => s + it.acumulado_anterior, 0))}
+                    </td>
                     <td></td>
+                    <td className="p-2 bg-blue-50"></td>
+                    <td className="p-2 text-right text-sm text-blue-700 bg-blue-50">
+                      {moeda(totalMedicao())}
+                    </td>
+                    <td className="p-2 bg-blue-50"></td>
+                    <td className="p-2 text-right text-sm">
+                      {moeda(itens.reduce((s, it) => s + calcItem(it).saldo, 0))}
+                    </td>
+                    <td colSpan={2}></td>
                   </tr>
                 </tfoot>
               </table>
@@ -224,9 +327,12 @@ export default function NovoBoletimPage() {
         </Card>
       )}
 
-      {form.contrato_id && itensContrato.length === 0 && (
+      {!carregandoItens && form.contrato_id && itens.length === 0 && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-          Este contrato não tem itens cadastrados na planilha orçamentária. Edite o contrato e adicione os itens primeiro.
+          Este contrato não tem itens cadastrados na planilha orçamentária.{' '}
+          <Link href={`/contratos/${form.contrato_id}`} className="underline font-medium">
+            Clique aqui para adicionar os itens.
+          </Link>
         </div>
       )}
 

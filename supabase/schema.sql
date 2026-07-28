@@ -11,6 +11,7 @@ create table if not exists contratantes (
   email text,
   email_nf text,
   inscricao_municipal text,
+  inscricao_estadual text,
   discriminacao_adicional text,
   created_at timestamptz default now()
 );
