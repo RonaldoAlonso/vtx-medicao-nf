@@ -148,7 +148,7 @@ export default function EditarContratoPage() {
   const contratanteSelecionado = contratantes.find(c => c.id === form.contratante_id)
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6 max-w-6xl">
       <div className="flex items-center gap-3">
         <Link href="/contratos">
           <Button variant="ghost" size="sm"><ArrowLeft className="w-4 h-4" /></Button>
@@ -233,10 +233,10 @@ export default function EditarContratoPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-gray-500 text-left">
-                  <th className="pb-2 pr-2 w-24">Referência</th>
-                  <th className="pb-2 pr-2">Descrição</th>
+                  <th className="pb-2 pr-2 w-40">Referência</th>
+                  <th className="pb-2 pr-2 min-w-[20rem]">Descrição</th>
                   <th className="pb-2 pr-2 w-16">Un.</th>
-                  <th className="pb-2 pr-2 w-24">Qtd.</th>
+                  <th className="pb-2 pr-2 w-32">Qtd.</th>
                   <th className="pb-2 pr-2 w-28">Preço Unit.</th>
                   <th className="pb-2 pr-2 w-28">Subtotal</th>
                   <th className="pb-2 w-8"></th>
