@@ -27,6 +27,7 @@ function moeda(v: number) {
 export default function ContratosPage() {
   const [contratos, setContratos] = useState<Contrato[]>([])
   const [carregando, setCarregando] = useState(true)
+  const [aba, setAba] = useState<'ativos' | 'encerrados'>('ativos')
   const supabase = createClient()
 
   async function carregar() {
@@ -46,6 +47,10 @@ export default function ContratosPage() {
     await supabase.from('contratos').delete().eq('id', id)
     carregar()
   }
+
+  const ativos = contratos.filter(c => c.ativo)
+  const encerrados = contratos.filter(c => !c.ativo)
+  const lista = aba === 'ativos' ? ativos : encerrados
 
   return (
     <div className="space-y-6">
@@ -73,8 +78,39 @@ export default function ContratosPage() {
           </Link>
         </div>
       ) : (
+        <>
+          <div className="flex gap-1 border-b border-gray-200">
+            <button
+              onClick={() => setAba('ativos')}
+              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                aba === 'ativos'
+                  ? 'border-blue-600 text-blue-700'
+                  : 'border-transparent text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              Ativos ({ativos.length})
+            </button>
+            <button
+              onClick={() => setAba('encerrados')}
+              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                aba === 'encerrados'
+                  ? 'border-blue-600 text-blue-700'
+                  : 'border-transparent text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              Encerrados ({encerrados.length})
+            </button>
+          </div>
+
+          {lista.length === 0 ? (
+            <div className="text-center py-16 text-gray-400">
+              <p className="text-lg font-medium">
+                {aba === 'ativos' ? 'Nenhum contrato ativo.' : 'Nenhum contrato encerrado.'}
+              </p>
+            </div>
+          ) : (
         <div className="grid gap-4">
-          {contratos.map(c => (
+          {lista.map(c => (
             <Card key={c.id}>
               <CardContent className="flex items-start justify-between pt-4">
                 <div className="space-y-1">
@@ -105,6 +141,8 @@ export default function ContratosPage() {
             </Card>
           ))}
         </div>
+          )}
+        </>
       )}
     </div>
   )
