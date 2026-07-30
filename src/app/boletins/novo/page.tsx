@@ -253,7 +253,7 @@ export default function NovoBoletimPage() {
                     <th className="p-2 text-right font-semibold text-gray-600 w-28">Sub-Total</th>
                     <th className="p-2 text-right font-semibold text-gray-600 w-28">Acum. Ant. (R$)</th>
                     <th className="p-2 text-right font-semibold text-gray-600 w-16">% Acum.</th>
-                    <th className="p-2 text-center font-semibold text-blue-700 w-24 bg-blue-50">Qtd. Medida</th>
+                    <th className="p-2 text-center font-semibold text-blue-700 w-36 bg-blue-50">Qtd. Medida</th>
                     <th className="p-2 text-right font-semibold text-blue-700 w-28 bg-blue-50">Valor Medido</th>
                     <th className="p-2 text-right font-semibold text-blue-700 w-16 bg-blue-50">% Atual</th>
                     <th className="p-2 text-right font-semibold text-gray-600 w-28">Saldo (R$)</th>
