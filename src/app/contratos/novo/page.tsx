@@ -7,12 +7,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 import { ArrowLeft, Plus, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
 type Contratante = { id: string; codigo: string; nome: string }
 type Item = { referencia: string; descricao: string; unidade: string; quantidade: string; preco_unitario: string; ordem: number }
+type Servico = { descricao: string }
 
 export default function NovoContratoPage() {
   const router = useRouter()
@@ -28,11 +30,18 @@ export default function NovoContratoPage() {
     valor_total: '',
     data_inicio: '',
     data_fim: '',
+    objeto_resumido: '',
+    objeto_municipio_uf: '',
+    objeto_vinculacao: '',
+    prazo_vigencia_extenso: '',
+    local_assinatura: '',
+    data_assinatura: '',
   })
 
   const [itens, setItens] = useState<Item[]>([
     { referencia: '', descricao: '', unidade: 'm', quantidade: '', preco_unitario: '', ordem: 1 }
   ])
+  const [servicos, setServicos] = useState<Servico[]>([])
 
   useEffect(() => {
     supabase.from('contratantes').select('id, codigo, nome').order('codigo')
@@ -51,6 +60,16 @@ export default function NovoContratoPage() {
     setItens(prev => prev.map((it, i) => i === idx ? { ...it, [field]: value } : it))
   }
 
+  function addServico() {
+    setServicos(prev => [...prev, { descricao: '' }])
+  }
+  function removeServico(idx: number) {
+    setServicos(prev => prev.filter((_, i) => i !== idx))
+  }
+  function updateServico(idx: number, value: string) {
+    setServicos(prev => prev.map((s, i) => i === idx ? { descricao: value } : s))
+  }
+
   function moeda(v: number) {
     return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
   }
@@ -65,8 +84,11 @@ export default function NovoContratoPage() {
     return moeda(subtotalNum(it))
   }
 
-  // Valor Total = somatório automático de todos os itens da planilha
-  const valorTotal = itens.reduce((acc, it) => acc + subtotalNum(it), 0)
+  // Valor Total = soma apenas dos itens que serão realmente gravados
+  // (com referência e descrição), para bater com o total salvo em contrato_itens.
+  const valorTotal = itens
+    .filter(it => it.referencia && it.descricao)
+    .reduce((acc, it) => acc + subtotalNum(it), 0)
 
   async function salvar() {
     if (!form.numero || !form.contratante_id || !form.obra) {
@@ -86,13 +108,19 @@ export default function NovoContratoPage() {
       valor_total: valorTotal,
       data_inicio: form.data_inicio || null,
       data_fim: form.data_fim || null,
+      objeto_resumido: form.objeto_resumido || null,
+      objeto_municipio_uf: form.objeto_municipio_uf || null,
+      objeto_vinculacao: form.objeto_vinculacao || null,
+      prazo_vigencia_extenso: form.prazo_vigencia_extenso || null,
+      local_assinatura: form.local_assinatura || null,
+      data_assinatura: form.data_assinatura || null,
     }).select().single()
 
-    if (error || !contrato) { alert('Erro ao salvar contrato.'); setSalvando(false); return }
+    if (error || !contrato) { alert('Erro ao salvar contrato.' + (error?.message ? '\n\n' + error.message : '')); setSalvando(false); return }
 
     const itensFiltrados = itens.filter(it => it.referencia && it.descricao)
     if (itensFiltrados.length > 0) {
-      await supabase.from('contrato_itens').insert(
+      const { error: eItens } = await supabase.from('contrato_itens').insert(
         itensFiltrados.map(it => ({
           contrato_id: contrato.id,
           referencia: it.referencia,
@@ -103,12 +131,33 @@ export default function NovoContratoPage() {
           ordem: it.ordem,
         }))
       )
+      if (eItens) {
+        alert('Contrato criado, mas houve um erro ao salvar os itens da planilha. Abra o contrato para revisar.\n\n' + eItens.message)
+        router.push(`/contratos/${contrato.id}`)
+        return
+      }
+    }
+
+    const servicosFiltrados = servicos.filter(s => s.descricao.trim())
+    if (servicosFiltrados.length > 0) {
+      const { error: eServ } = await supabase.from('contrato_servicos').insert(
+        servicosFiltrados.map((s, idx) => ({
+          contrato_id: contrato.id,
+          descricao: s.descricao.trim(),
+          ordem: idx + 1,
+        }))
+      )
+      if (eServ) {
+        alert('Contrato criado, mas houve um erro ao salvar os serviços. Abra o contrato para revisar.\n\n' + eServ.message)
+        router.push(`/contratos/${contrato.id}`)
+        return
+      }
     }
     router.push('/contratos')
   }
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6 max-w-6xl">
       <div className="flex items-center gap-3">
         <Link href="/contratos">
           <Button variant="ghost" size="sm"><ArrowLeft className="w-4 h-4" /></Button>
@@ -220,6 +269,69 @@ export default function NovoContratoPage() {
               </tfoot>
             </table>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle className="text-base">Dados para o Contrato (Word)</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1">
+            <Label>Objeto — descrição resumida</Label>
+            <Textarea value={form.objeto_resumido} onChange={e => setForm(p => ({ ...p, objeto_resumido: e.target.value }))} rows={2} placeholder="ex: serviços de engenharia consultiva para..." />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <Label>Município/UF da obra</Label>
+              <Input value={form.objeto_municipio_uf} onChange={e => setForm(p => ({ ...p, objeto_municipio_uf: e.target.value }))} placeholder="ex: Campinas/SP" />
+            </div>
+            <div className="space-y-1">
+              <Label>Prazo de vigência (por extenso)</Label>
+              <Input value={form.prazo_vigencia_extenso} onChange={e => setForm(p => ({ ...p, prazo_vigencia_extenso: e.target.value }))} placeholder="ex: 12 (doze) meses" />
+            </div>
+          </div>
+          <div className="space-y-1">
+            <Label>Vinculação (programa, empreendimento, lote — se aplicável)</Label>
+            <Textarea value={form.objeto_vinculacao} onChange={e => setForm(p => ({ ...p, objeto_vinculacao: e.target.value }))} rows={2} placeholder="ex: Programa Integra Tietê, Lote 1A2" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <Label>Local da assinatura</Label>
+              <Input value={form.local_assinatura} onChange={e => setForm(p => ({ ...p, local_assinatura: e.target.value }))} placeholder="padrão: cidade/UF da contratante" />
+            </div>
+            <div className="space-y-1">
+              <Label>Data da assinatura</Label>
+              <Input type="date" value={form.data_assinatura} onChange={e => setForm(p => ({ ...p, data_assinatura: e.target.value }))} />
+            </div>
+          </div>
+          <p className="text-xs text-gray-400">
+            As datas de vigência usam "Data de Início" e "Data de Fim" acima. Os dados da empresa e do representante legal vêm do cadastro do <strong>Contratante</strong>.
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="text-base">Serviços (Cláusula 1ª do Contrato)</CardTitle>
+            <p className="text-xs text-gray-400 mt-1">Aparecem como a), b), c)... no contrato gerado.</p>
+          </div>
+          <Button size="sm" variant="outline" onClick={addServico}>
+            <Plus className="w-4 h-4 mr-1" /> Adicionar Serviço
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {servicos.map((s, idx) => (
+            <div key={idx} className="flex items-start gap-2">
+              <span className="mt-2 text-sm font-semibold text-gray-500 w-6 flex-shrink-0">{String.fromCharCode(97 + idx)})</span>
+              <Textarea value={s.descricao} onChange={e => updateServico(idx, e.target.value)} rows={2} className="flex-1" placeholder="Descrição do serviço — escopo e quantitativos" />
+              <Button size="sm" variant="ghost" onClick={() => removeServico(idx)} className="flex-shrink-0">
+                <Trash2 className="w-4 h-4 text-red-400" />
+              </Button>
+            </div>
+          ))}
+          {servicos.length === 0 && (
+            <p className="py-4 text-center text-gray-400 text-xs">Nenhum serviço. Clique em "Adicionar Serviço".</p>
+          )}
         </CardContent>
       </Card>
 

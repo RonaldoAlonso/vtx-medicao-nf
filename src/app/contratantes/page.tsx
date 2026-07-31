@@ -22,6 +22,14 @@ export type Contratante = {
   inscricao_municipal: string
   inscricao_estadual: string
   discriminacao_adicional: string
+  // Representante legal (usado na geração do contrato Word)
+  rep_nome?: string
+  rep_nacionalidade?: string
+  rep_estado_civil?: string
+  rep_profissao?: string
+  rep_rg?: string
+  rep_cpf?: string
+  rep_cidade_uf?: string
 }
 
 const INICIAIS: Omit<Contratante, 'id'>[] = [

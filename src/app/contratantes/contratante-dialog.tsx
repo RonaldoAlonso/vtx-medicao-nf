@@ -20,6 +20,8 @@ const VAZIO: Contratante = {
   codigo: '', nome: '', cnpj: '', endereco: '', cep: '',
   municipio: '', uf: 'SP', email: '', email_nf: '',
   inscricao_municipal: '', inscricao_estadual: '', discriminacao_adicional: '',
+  rep_nome: '', rep_nacionalidade: '', rep_estado_civil: '', rep_profissao: '',
+  rep_rg: '', rep_cpf: '', rep_cidade_uf: '',
 }
 
 export function ContratanteDialog({ open, onClose, onSave, inicial }: Props) {
@@ -92,6 +94,46 @@ export function ContratanteDialog({ open, onClose, onSave, inicial }: Props) {
             <Label>Discriminação adicional (aparece na NF)</Label>
             <Textarea {...register('discriminacao_adicional')} rows={3} />
           </div>
+
+          <div className="border-t pt-4 space-y-4">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900">Representante Legal</h3>
+              <p className="text-xs text-gray-400">Usado na geração do Contrato em Word (preâmbulo e assinatura).</p>
+            </div>
+            <div className="space-y-1">
+              <Label>Nome do representante legal</Label>
+              <Input {...register('rep_nome')} placeholder="ex: João da Silva" />
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <Label>Nacionalidade</Label>
+                <Input {...register('rep_nacionalidade')} placeholder="ex: brasileiro(a)" />
+              </div>
+              <div className="space-y-1">
+                <Label>Estado civil</Label>
+                <Input {...register('rep_estado_civil')} placeholder="ex: casado(a)" />
+              </div>
+              <div className="space-y-1">
+                <Label>Profissão</Label>
+                <Input {...register('rep_profissao')} placeholder="ex: Engenheiro Civil" />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <Label>RG (nº e órgão emissor/UF)</Label>
+                <Input {...register('rep_rg')} placeholder="ex: 12.345.678-9 SSP/SP" />
+              </div>
+              <div className="space-y-1">
+                <Label>CPF</Label>
+                <Input {...register('rep_cpf')} placeholder="000.000.000-00" />
+              </div>
+              <div className="space-y-1">
+                <Label>Cidade/UF (domicílio)</Label>
+                <Input {...register('rep_cidade_uf')} placeholder="ex: São Paulo/SP" />
+              </div>
+            </div>
+          </div>
+
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
             <Button type="submit">Salvar</Button>
