@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ClipboardList, Receipt, DollarSign, AlertCircle, Loader2 } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
@@ -18,6 +19,12 @@ const STATUS_BM: Record<string, { label: string; cls: string }> = {
 }
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+const MESES_FULL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+// 'YYYY-MM' -> 'Agosto/2026'
+function labelMesBM(ym: string) {
+  const [ano, mes] = ym.split('-')
+  return `${MESES_FULL[parseInt(mes, 10) - 1] ?? mes}/${ano}`
+}
 
 type BoletimRec = {
   id: string; numero_medicao: number; data_medicao: string; status: string; valor_liquido: number
@@ -32,7 +39,8 @@ export default function Dashboard() {
   const [nfsAguardando, setNfsAguardando] = useState(0)
   const [aReceberMes, setAReceberMes] = useState(0)
   const [nfsVencidas, setNfsVencidas] = useState(0)
-  const [ultimosBoletins, setUltimosBoletins] = useState<BoletimRec[]>([])
+  const [todosBoletins, setTodosBoletins] = useState<BoletimRec[]>([])
+  const [mesBM, setMesBM] = useState('todos')
   const [grafico, setGrafico] = useState<{ mes: string; valor: number }[]>([])
 
   useEffect(() => {
@@ -67,7 +75,7 @@ export default function Dashboard() {
         notas.filter(n => n.status !== 'paga' && n.data_vencimento && new Date(n.data_vencimento + 'T23:59:59') < hoje).length
       )
 
-      setUltimosBoletins(boletins.slice(0, 5))
+      setTodosBoletins(boletins)
 
       // Gráfico: previsão de recebimento por mês (vencimento), NFs não pagas
       const porMes = new Map<string, number>()
@@ -95,6 +103,16 @@ export default function Dashboard() {
   if (carregando) {
     return <div className="flex items-center justify-center py-16 text-gray-400"><Loader2 className="w-6 h-6 animate-spin mr-2" /> Carregando dashboard...</div>
   }
+
+  // Meses disponíveis para filtro do card de boletins
+  const mesesBM = Array.from(
+    new Set(todosBoletins.map(b => b.data_medicao?.slice(0, 7)).filter(Boolean) as string[])
+  ).sort().reverse()
+
+  // 'todos' = os 5 mais recentes; mês específico = todos os boletins daquele mês
+  const boletinsExibidos = mesBM === 'todos'
+    ? todosBoletins.slice(0, 5)
+    : todosBoletins.filter(b => b.data_medicao?.startsWith(mesBM))
 
   const kpis = [
     { titulo: 'BMs em aberto', valor: String(bmsAbertos), legenda: 'rascunho ou aprovado', Icon: ClipboardList, cor: 'text-blue-500' },
@@ -127,16 +145,33 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
-          <CardHeader><CardTitle className="text-base">Últimos Boletins de Medição</CardTitle></CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between gap-3">
+            <CardTitle className="text-base">
+              {mesBM === 'todos' ? 'Últimos Boletins de Medição' : 'Boletins de Medição'}
+            </CardTitle>
+            <Select value={mesBM} onValueChange={v => setMesBM(String(v ?? 'todos'))}>
+              <SelectTrigger className="w-44 h-8"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os meses</SelectItem>
+                {mesesBM.map(m => (
+                  <SelectItem key={m} value={m}>{labelMesBM(m)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CardHeader>
           <CardContent>
-            {ultimosBoletins.length === 0 ? (
+            {boletinsExibidos.length === 0 ? (
               <div className="text-center py-8 text-gray-400 text-sm">
-                Nenhum boletim cadastrado ainda.<br />
-                <Link href="/boletins/novo" className="text-blue-600 hover:underline mt-1 inline-block">Criar primeiro boletim</Link>
+                {mesBM === 'todos' ? (
+                  <>Nenhum boletim cadastrado ainda.<br />
+                  <Link href="/boletins/novo" className="text-blue-600 hover:underline mt-1 inline-block">Criar primeiro boletim</Link></>
+                ) : (
+                  <>Nenhum boletim neste mês.</>
+                )}
               </div>
             ) : (
               <div className="divide-y divide-gray-100">
-                {ultimosBoletins.map(b => {
+                {boletinsExibidos.map(b => {
                   const st = STATUS_BM[b.status] ?? STATUS_BM.rascunho
                   return (
                     <Link key={b.id} href={`/boletins/${b.id}`} className="flex items-center justify-between py-2.5 hover:bg-gray-50 -mx-2 px-2 rounded">

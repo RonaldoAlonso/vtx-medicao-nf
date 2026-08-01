@@ -4,9 +4,17 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Plus, Pencil, Trash2, Loader2, ClipboardList } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+
+const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+// 'YYYY-MM' -> 'Agosto/2026'
+function labelMes(ym: string) {
+  const [ano, mes] = ym.split('-')
+  return `${MESES[parseInt(mes, 10) - 1] ?? mes}/${ano}`
+}
 
 type Boletim = {
   id: string
@@ -31,6 +39,7 @@ function moeda(v: number) {
 export default function BoletinsPage() {
   const [boletins, setBoletins] = useState<Boletim[]>([])
   const [carregando, setCarregando] = useState(true)
+  const [mesFiltro, setMesFiltro] = useState('todos')
   const supabase = createClient()
 
   async function carregar() {
@@ -50,6 +59,15 @@ export default function BoletinsPage() {
     await supabase.from('boletins').delete().eq('id', id)
     carregar()
   }
+
+  // Meses disponíveis (a partir da data de medição), mais recentes primeiro
+  const mesesDisponiveis = Array.from(
+    new Set(boletins.map(b => b.data_medicao?.slice(0, 7)).filter(Boolean) as string[])
+  ).sort().reverse()
+
+  const boletinsFiltrados = mesFiltro === 'todos'
+    ? boletins
+    : boletins.filter(b => b.data_medicao?.startsWith(mesFiltro))
 
   return (
     <div className="space-y-6">
@@ -76,9 +94,31 @@ export default function BoletinsPage() {
           </Link>
         </div>
       ) : (
-        <div className="grid gap-4">
-          {boletins.map(b => {
-            const st = STATUS[b.status] ?? STATUS.rascunho
+        <>
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-sm text-gray-500">Filtrar por mês:</span>
+            <Select value={mesFiltro} onValueChange={v => setMesFiltro(String(v ?? 'todos'))}>
+              <SelectTrigger className="w-52"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os meses</SelectItem>
+                {mesesDisponiveis.map(m => (
+                  <SelectItem key={m} value={m}>{labelMes(m)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span className="text-sm text-gray-400">
+              {boletinsFiltrados.length} boletim{boletinsFiltrados.length === 1 ? '' : 's'}
+            </span>
+          </div>
+
+          {boletinsFiltrados.length === 0 ? (
+            <div className="text-center py-16 text-gray-400">
+              <p className="text-lg font-medium">Nenhum boletim neste mês.</p>
+            </div>
+          ) : (
+            <div className="grid gap-4">
+              {boletinsFiltrados.map(b => {
+                const st = STATUS[b.status] ?? STATUS.rascunho
             return (
               <Card key={b.id}>
                 <CardContent className="flex items-start justify-between pt-4">
@@ -106,9 +146,11 @@ export default function BoletinsPage() {
                   </div>
                 </CardContent>
               </Card>
-            )
-          })}
-        </div>
+                )
+              })}
+            </div>
+          )}
+        </>
       )}
     </div>
   )
