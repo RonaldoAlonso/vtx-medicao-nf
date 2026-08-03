@@ -112,7 +112,7 @@ create table if not exists notas_fiscais (
   data_emissao date,
   data_vencimento date,
   data_pagamento date,
-  status text default 'aguardando', -- aguardando | emitida | paga
+  status text default 'aguardando', -- aguardando | emitida | recebida | paga
   nf_xml text,
   nf_pdf_url text,
   protocolo_prefeitura text,

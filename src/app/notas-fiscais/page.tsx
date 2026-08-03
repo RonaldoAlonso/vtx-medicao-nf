@@ -33,8 +33,12 @@ type BoletimOpc = {
 const STATUS: Record<string, { label: string; cls: string }> = {
   aguardando: { label: 'Aguardando', cls: 'bg-amber-100 text-amber-700' },
   emitida:    { label: 'Emitida',    cls: 'bg-blue-100 text-blue-700' },
+  recebida:   { label: 'Recebida',   cls: 'bg-teal-100 text-teal-700' },
   paga:       { label: 'Paga',       cls: 'bg-green-100 text-green-700' },
 }
+
+// Ordem dos status para o seletor de cada nota e para o filtro
+const STATUS_ORDEM = ['aguardando', 'emitida', 'recebida', 'paga']
 
 const moeda = (v: number) => (v ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
@@ -45,6 +49,7 @@ export default function NotasFiscaisPage() {
   const [carregando, setCarregando] = useState(true)
   const [open, setOpen] = useState(false)
   const [salvando, setSalvando] = useState(false)
+  const [statusFiltro, setStatusFiltro] = useState('todos')
   const [form, setForm] = useState({ boletim_id: '', numero_nf: '', discriminacao_servicos: '', valor_servicos: '', data_emissao: new Date().toISOString().split('T')[0] })
 
   async function carregar() {
@@ -106,6 +111,15 @@ export default function NotasFiscaisPage() {
     carregar()
   }
 
+  async function atualizarStatus(id: string, novo: string) {
+    // atualiza na tela imediatamente e grava no banco
+    setNotas(prev => prev.map(n => n.id === id ? { ...n, status: novo } : n))
+    const { error } = await supabase.from('notas_fiscais').update({ status: novo }).eq('id', id)
+    if (error) { alert('Não foi possível salvar a situação da NF.\n\n' + error.message); carregar() }
+  }
+
+  const notasFiltradas = statusFiltro === 'todos' ? notas : notas.filter(n => n.status === statusFiltro)
+
   const boletimSel = boletins.find(b => b.id === form.boletim_id)
 
   return (
@@ -127,11 +141,33 @@ export default function NotasFiscaisPage() {
           <p className="text-sm mt-2">Clique em "Emitir NF de um Boletim" para gerar a primeira.</p>
         </div>
       ) : (
-        <div className="grid gap-4">
-          {notas.map(n => {
-            const st = STATUS[n.status] ?? STATUS.aguardando
-            return (
-              <Card key={n.id}>
+        <>
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-sm text-gray-500">Situação:</span>
+            <Select value={statusFiltro} onValueChange={v => setStatusFiltro(String(v ?? 'todos'))}>
+              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todas</SelectItem>
+                {STATUS_ORDEM.map(s => (
+                  <SelectItem key={s} value={s}>{STATUS[s].label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span className="text-sm text-gray-400">
+              {notasFiltradas.length} nota{notasFiltradas.length === 1 ? '' : 's'}
+            </span>
+          </div>
+
+          {notasFiltradas.length === 0 ? (
+            <div className="text-center py-16 text-gray-400">
+              <p className="text-lg font-medium">Nenhuma nota com essa situação.</p>
+            </div>
+          ) : (
+            <div className="grid gap-4">
+              {notasFiltradas.map(n => {
+                const st = STATUS[n.status] ?? STATUS.aguardando
+                return (
+                  <Card key={n.id}>
                 <CardContent className="flex items-start justify-between pt-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -144,19 +180,31 @@ export default function NotasFiscaisPage() {
                     <p className="text-sm text-gray-500">{n.discriminacao_servicos}</p>
                     <p className="text-sm">Valor: <strong className="text-gray-900">{moeda(n.valor_servicos)}</strong></p>
                   </div>
-                  <div className="flex gap-2 flex-shrink-0">
-                    <Link href={`/notas-fiscais/${n.id}`}>
-                      <Button size="sm" variant="outline"><FileText className="w-4 h-4 mr-1" /> Plotar relatório</Button>
-                    </Link>
-                    <Button size="sm" variant="ghost" onClick={() => excluir(n.id, n.numero_nf)}>
-                      <Trash2 className="w-4 h-4 text-red-400" />
-                    </Button>
+                  <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                    <Select value={n.status} onValueChange={v => atualizarStatus(n.id, String(v ?? n.status))}>
+                      <SelectTrigger className="w-36 h-8 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {STATUS_ORDEM.map(s => (
+                          <SelectItem key={s} value={s}>{STATUS[s].label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <div className="flex gap-2">
+                      <Link href={`/notas-fiscais/${n.id}`}>
+                        <Button size="sm" variant="outline"><FileText className="w-4 h-4 mr-1" /> Plotar relatório</Button>
+                      </Link>
+                      <Button size="sm" variant="ghost" onClick={() => excluir(n.id, n.numero_nf)}>
+                        <Trash2 className="w-4 h-4 text-red-400" />
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
-              </Card>
-            )
-          })}
-        </div>
+                  </Card>
+                )
+              })}
+            </div>
+          )}
+        </>
       )}
 
       {/* Dialog: emitir NF a partir de um boletim */}

@@ -66,13 +66,14 @@ export default function Dashboard() {
       // KPIs
       setBmsAbertos(boletins.filter(b => b.status === 'rascunho' || b.status === 'aprovado').length)
       setNfsAguardando(boletins.filter(b => b.status === 'aprovado').length)
+      const quitada = (s: string) => s === 'paga' || s === 'recebida'
       setAReceberMes(
         notas
-          .filter(n => n.status !== 'paga' && n.data_vencimento?.startsWith(anoMesAtual))
+          .filter(n => !quitada(n.status) && n.data_vencimento?.startsWith(anoMesAtual))
           .reduce((s, n) => s + (n.valor_servicos ?? 0), 0)
       )
       setNfsVencidas(
-        notas.filter(n => n.status !== 'paga' && n.data_vencimento && new Date(n.data_vencimento + 'T23:59:59') < hoje).length
+        notas.filter(n => !quitada(n.status) && n.data_vencimento && new Date(n.data_vencimento + 'T23:59:59') < hoje).length
       )
 
       setTodosBoletins(boletins)
@@ -80,7 +81,7 @@ export default function Dashboard() {
       // Gráfico: previsão de recebimento por mês (vencimento), NFs não pagas
       const porMes = new Map<string, number>()
       notas.forEach(n => {
-        if (n.status === 'paga') return
+        if (n.status === 'paga' || n.status === 'recebida') return
         const ref = n.data_vencimento || n.data_emissao
         if (!ref) return
         const d = new Date(ref + 'T00:00:00')
