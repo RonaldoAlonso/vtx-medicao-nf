@@ -23,7 +23,7 @@ type Boletim = {
   data_vencimento: string
   status: string
   valor_liquido: number
-  contratos: { numero: string; obra: string; contratantes: { codigo: string } }
+  contratos: { numero: string; obra: string; contratantes: { codigo: string; nome: string } }
 }
 
 const STATUS: Record<string, { label: string; cls: string }> = {
@@ -41,12 +41,13 @@ export default function BoletinsPage() {
   const [carregando, setCarregando] = useState(true)
   const [mesFiltro, setMesFiltro] = useState('todos')
   const [statusFiltro, setStatusFiltro] = useState('todos')
+  const [contratanteFiltro, setContratanteFiltro] = useState('todos')
   const supabase = createClient()
 
   async function carregar() {
     const { data } = await supabase
       .from('boletins')
-      .select('*, contratos(numero, obra, contratantes(codigo))')
+      .select('*, contratos(numero, obra, contratantes(codigo, nome))')
       .order('data_medicao', { ascending: false })
     setBoletins((data as Boletim[]) ?? [])
     setCarregando(false)
@@ -66,9 +67,19 @@ export default function BoletinsPage() {
     new Set(boletins.map(b => b.data_medicao?.slice(0, 7)).filter(Boolean) as string[])
   ).sort().reverse()
 
+  // Contratantes que aparecem nos boletins (código -> nome), ordenados por código
+  const contratantesDisponiveis = Array.from(
+    boletins.reduce((mapa, b) => {
+      const c = b.contratos?.contratantes
+      if (c?.codigo) mapa.set(c.codigo, c.nome ?? c.codigo)
+      return mapa
+    }, new Map<string, string>())
+  ).sort(([a], [b]) => a.localeCompare(b))
+
   const boletinsFiltrados = boletins.filter(b =>
     (mesFiltro === 'todos' || b.data_medicao?.startsWith(mesFiltro)) &&
-    (statusFiltro === 'todos' || b.status === statusFiltro)
+    (statusFiltro === 'todos' || b.status === statusFiltro) &&
+    (contratanteFiltro === 'todos' || b.contratos?.contratantes?.codigo === contratanteFiltro)
   )
 
   return (
@@ -116,6 +127,16 @@ export default function BoletinsPage() {
                 <SelectItem value="rascunho">Rascunho</SelectItem>
                 <SelectItem value="aprovado">Aprovado</SelectItem>
                 <SelectItem value="nf_emitida">NF Emitida</SelectItem>
+              </SelectContent>
+            </Select>
+            <span className="text-sm text-gray-500">Contratante:</span>
+            <Select value={contratanteFiltro} onValueChange={v => setContratanteFiltro(String(v ?? 'todos'))}>
+              <SelectTrigger className="w-60"><SelectValue /></SelectTrigger>
+              <SelectContent className="max-w-[24rem]">
+                <SelectItem value="todos">Todos</SelectItem>
+                {contratantesDisponiveis.map(([codigo, nome]) => (
+                  <SelectItem key={codigo} value={codigo} className="whitespace-normal">[{codigo}] {nome}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <span className="text-sm text-gray-400">
