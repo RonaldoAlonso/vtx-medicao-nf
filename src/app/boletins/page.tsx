@@ -40,6 +40,7 @@ export default function BoletinsPage() {
   const [boletins, setBoletins] = useState<Boletim[]>([])
   const [carregando, setCarregando] = useState(true)
   const [mesFiltro, setMesFiltro] = useState('todos')
+  const [statusFiltro, setStatusFiltro] = useState('todos')
   const supabase = createClient()
 
   async function carregar() {
@@ -65,9 +66,10 @@ export default function BoletinsPage() {
     new Set(boletins.map(b => b.data_medicao?.slice(0, 7)).filter(Boolean) as string[])
   ).sort().reverse()
 
-  const boletinsFiltrados = mesFiltro === 'todos'
-    ? boletins
-    : boletins.filter(b => b.data_medicao?.startsWith(mesFiltro))
+  const boletinsFiltrados = boletins.filter(b =>
+    (mesFiltro === 'todos' || b.data_medicao?.startsWith(mesFiltro)) &&
+    (statusFiltro === 'todos' || b.status === statusFiltro)
+  )
 
   return (
     <div className="space-y-6">
@@ -106,6 +108,16 @@ export default function BoletinsPage() {
                 ))}
               </SelectContent>
             </Select>
+            <span className="text-sm text-gray-500">Situação:</span>
+            <Select value={statusFiltro} onValueChange={v => setStatusFiltro(String(v ?? 'todos'))}>
+              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todas</SelectItem>
+                <SelectItem value="rascunho">Rascunho</SelectItem>
+                <SelectItem value="aprovado">Aprovado</SelectItem>
+                <SelectItem value="nf_emitida">NF Emitida</SelectItem>
+              </SelectContent>
+            </Select>
             <span className="text-sm text-gray-400">
               {boletinsFiltrados.length} boletim{boletinsFiltrados.length === 1 ? '' : 's'}
             </span>
@@ -113,7 +125,7 @@ export default function BoletinsPage() {
 
           {boletinsFiltrados.length === 0 ? (
             <div className="text-center py-16 text-gray-400">
-              <p className="text-lg font-medium">Nenhum boletim neste mês.</p>
+              <p className="text-lg font-medium">Nenhum boletim com os filtros selecionados.</p>
             </div>
           ) : (
             <div className="grid gap-4">
