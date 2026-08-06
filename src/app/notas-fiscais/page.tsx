@@ -9,18 +9,19 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { Receipt, Plus, FileText, Trash2, Loader2 } from 'lucide-react'
+import { Receipt, Plus, FileText, Trash2, Loader2, Pencil } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
 type Nota = {
   id: string
+  boletim_id: string
   numero_nf: string
   discriminacao_servicos: string
   valor_servicos: number
   status: string
   data_emissao: string | null
-  boletins: { numero_medicao: number; contratos: { numero: string; obra: string; contratantes: { codigo: string } } }
+  boletins: { numero_medicao: number; contratos: { numero: string; obra: string; contratantes: { codigo: string; nome: string } } }
 }
 
 type BoletimOpc = {
@@ -50,13 +51,15 @@ export default function NotasFiscaisPage() {
   const [open, setOpen] = useState(false)
   const [salvando, setSalvando] = useState(false)
   const [statusFiltro, setStatusFiltro] = useState('todos')
+  const [contratanteFiltro, setContratanteFiltro] = useState('todos')
+  const [editandoId, setEditandoId] = useState<string | null>(null)
   const [form, setForm] = useState({ boletim_id: '', numero_nf: '', discriminacao_servicos: '', valor_servicos: '', data_emissao: new Date().toISOString().split('T')[0] })
 
   async function carregar() {
     const [{ data: nfs }, { data: bms }] = await Promise.all([
       supabase
         .from('notas_fiscais')
-        .select('id, numero_nf, discriminacao_servicos, valor_servicos, status, data_emissao, boletins(numero_medicao, contratos(numero, obra, contratantes(codigo)))')
+        .select('id, boletim_id, numero_nf, discriminacao_servicos, valor_servicos, status, data_emissao, boletins(numero_medicao, contratos(numero, obra, contratantes(codigo, nome)))')
         .order('data_emissao', { ascending: false }),
       supabase
         .from('boletins')
@@ -83,25 +86,54 @@ export default function NotasFiscaisPage() {
     }))
   }
 
+  function resetForm() {
+    setForm({ boletim_id: '', numero_nf: '', discriminacao_servicos: '', valor_servicos: '', data_emissao: new Date().toISOString().split('T')[0] })
+  }
+
+  function abrirNovo() {
+    setEditandoId(null)
+    resetForm()
+    setOpen(true)
+  }
+
+  function abrirEdicao(n: Nota) {
+    setEditandoId(n.id)
+    setForm({
+      boletim_id: n.boletim_id ?? '',
+      numero_nf: n.numero_nf ?? '',
+      discriminacao_servicos: n.discriminacao_servicos ?? '',
+      valor_servicos: String(n.valor_servicos ?? ''),
+      data_emissao: n.data_emissao ?? '',
+    })
+    setOpen(true)
+  }
+
   async function salvar() {
     if (!form.boletim_id || !form.numero_nf) {
       alert('Selecione o boletim e informe o número da NF.')
       return
     }
     setSalvando(true)
-    await supabase.from('notas_fiscais').insert({
+    const dados = {
       boletim_id: form.boletim_id,
       numero_nf: form.numero_nf,
       discriminacao_servicos: form.discriminacao_servicos,
       valor_servicos: parseFloat(String(form.valor_servicos).replace(',', '.')) || 0,
       data_emissao: form.data_emissao || null,
-      status: 'emitida',
-    })
-    // marca o boletim como NF emitida
-    await supabase.from('boletins').update({ status: 'nf_emitida' }).eq('id', form.boletim_id)
+    }
+    if (editandoId) {
+      const { error } = await supabase.from('notas_fiscais').update(dados).eq('id', editandoId)
+      if (error) { alert('Erro ao salvar a nota fiscal.\n\n' + error.message); setSalvando(false); return }
+    } else {
+      const { error } = await supabase.from('notas_fiscais').insert({ ...dados, status: 'emitida' })
+      if (error) { alert('Erro ao emitir a nota fiscal.\n\n' + error.message); setSalvando(false); return }
+      // marca o boletim como NF emitida (só na emissão)
+      await supabase.from('boletins').update({ status: 'nf_emitida' }).eq('id', form.boletim_id)
+    }
     setSalvando(false)
     setOpen(false)
-    setForm({ boletim_id: '', numero_nf: '', discriminacao_servicos: '', valor_servicos: '', data_emissao: new Date().toISOString().split('T')[0] })
+    setEditandoId(null)
+    resetForm()
     carregar()
   }
 
@@ -124,7 +156,20 @@ export default function NotasFiscaisPage() {
     return Number.isNaN(n) ? Infinity : n
   }
 
-  const notasFiltradas = (statusFiltro === 'todos' ? notas : notas.filter(n => n.status === statusFiltro))
+  // Contratantes que aparecem nas notas (código -> nome), ordenados por código
+  const contratantesDisponiveis = Array.from(
+    notas.reduce((mapa, n) => {
+      const c = n.boletins?.contratos?.contratantes
+      if (c?.codigo) mapa.set(c.codigo, c.nome ?? c.codigo)
+      return mapa
+    }, new Map<string, string>())
+  ).sort(([a], [b]) => a.localeCompare(b))
+
+  const notasFiltradas = notas
+    .filter(n =>
+      (statusFiltro === 'todos' || n.status === statusFiltro) &&
+      (contratanteFiltro === 'todos' || n.boletins?.contratos?.contratantes?.codigo === contratanteFiltro)
+    )
     .slice()
     .sort((a, b) => numeroNf(a.numero_nf) - numeroNf(b.numero_nf) || String(a.numero_nf).localeCompare(String(b.numero_nf)))
 
@@ -137,7 +182,7 @@ export default function NotasFiscaisPage() {
           <h2 className="text-2xl font-bold text-gray-900">Notas Fiscais</h2>
           <p className="text-gray-500 mt-1">Emissão de NFS-e a partir dos boletins de medição</p>
         </div>
-        <Button onClick={() => setOpen(true)}><Plus className="w-4 h-4 mr-2" /> Emitir NF de um Boletim</Button>
+        <Button onClick={abrirNovo}><Plus className="w-4 h-4 mr-2" /> Emitir NF de um Boletim</Button>
       </div>
 
       {carregando ? (
@@ -158,6 +203,16 @@ export default function NotasFiscaisPage() {
                 <SelectItem value="todos">Todas</SelectItem>
                 {STATUS_ORDEM.map(s => (
                   <SelectItem key={s} value={s}>{STATUS[s].label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <span className="text-sm text-gray-500">Cliente:</span>
+            <Select value={contratanteFiltro} onValueChange={v => setContratanteFiltro(String(v ?? 'todos'))}>
+              <SelectTrigger className="w-60"><SelectValue /></SelectTrigger>
+              <SelectContent className="max-w-[24rem]">
+                <SelectItem value="todos">Todos</SelectItem>
+                {contratantesDisponiveis.map(([codigo, nome]) => (
+                  <SelectItem key={codigo} value={codigo} className="whitespace-normal">[{codigo}] {nome}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -198,6 +253,9 @@ export default function NotasFiscaisPage() {
                       </SelectContent>
                     </Select>
                     <div className="flex gap-2">
+                      <Button size="sm" variant="outline" onClick={() => abrirEdicao(n)}>
+                        <Pencil className="w-4 h-4 mr-1" /> Editar
+                      </Button>
                       <Link href={`/notas-fiscais/${n.id}`}>
                         <Button size="sm" variant="outline"><FileText className="w-4 h-4 mr-1" /> Plotar relatório</Button>
                       </Link>
@@ -216,9 +274,9 @@ export default function NotasFiscaisPage() {
       )}
 
       {/* Dialog: emitir NF a partir de um boletim */}
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setEditandoId(null) }}>
         <DialogContent className="max-w-2xl">
-          <DialogHeader><DialogTitle>Emitir Nota Fiscal de um Boletim</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editandoId ? 'Editar Nota Fiscal' : 'Emitir Nota Fiscal de um Boletim'}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div className="space-y-1">
               <Label>Boletim de Medição *</Label>
@@ -261,7 +319,9 @@ export default function NotasFiscaisPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
             <Button onClick={salvar} disabled={salvando || !form.boletim_id}>
-              {salvando ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Emitindo...</> : 'Emitir NF'}
+              {salvando
+                ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Salvando...</>
+                : editandoId ? 'Salvar Alterações' : 'Emitir NF'}
             </Button>
           </DialogFooter>
         </DialogContent>
