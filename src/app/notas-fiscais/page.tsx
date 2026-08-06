@@ -118,7 +118,15 @@ export default function NotasFiscaisPage() {
     if (error) { alert('Não foi possível salvar a situação da NF.\n\n' + error.message); carregar() }
   }
 
-  const notasFiltradas = statusFiltro === 'todos' ? notas : notas.filter(n => n.status === statusFiltro)
+  // Número da NF como valor numérico (ex: "072" -> 72) para ordenar corretamente
+  const numeroNf = (s: string) => {
+    const n = parseInt(String(s ?? '').replace(/\D/g, ''), 10)
+    return Number.isNaN(n) ? Infinity : n
+  }
+
+  const notasFiltradas = (statusFiltro === 'todos' ? notas : notas.filter(n => n.status === statusFiltro))
+    .slice()
+    .sort((a, b) => numeroNf(a.numero_nf) - numeroNf(b.numero_nf) || String(a.numero_nf).localeCompare(String(b.numero_nf)))
 
   const boletimSel = boletins.find(b => b.id === form.boletim_id)
 
